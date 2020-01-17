@@ -9,14 +9,15 @@
 #include <iostream>
 #include <chrono>
 
-#include "solver.cuh";
+#include "solver.cuh"
+#include "cpuSolver.h"
 
 using namespace std;
 
 constexpr char* sudokuPath = "sudoku.csv";
-constexpr int sudokuMaxCout = 100;
+constexpr int sudokuMaxCout = 0xefffff;
 
-bool IsCorrect(char* sudoku, char* answer)
+bool IsCorrect(u8* sudoku, u8* answer)
 {
 	for (int i = 0; i < 81; i++)
 		if (answer[i] != sudoku[i])
@@ -25,14 +26,14 @@ bool IsCorrect(char* sudoku, char* answer)
 	return true;
 }
 
-bool SolveFromFile(string filename)
+void SolveFromFile(string filename)
 {
 	auto i = ifstream(filename);
 	if (!i.good())
-		return false;
+		return;
 
-	char sudoku[81];
-	char solution[81];
+	u8 sudoku[81];
+	u8 solution[81];
 
 	int counter = 1;
 	
@@ -52,17 +53,23 @@ bool SolveFromFile(string filename)
 
 		const auto begin = chrono::high_resolution_clock::now();
 		//compute
-		//...
+
+		u8 cpuAns[81];
+		SolveCpu(sudoku, cpuAns);
 
 		const auto end = chrono::high_resolution_clock::now();
 		const auto duration = chrono::duration_cast<chrono::milliseconds>(end - begin).count();
 
 		//check result
-		string result = IsCorrect(sudoku, solution) ? "OK" : "WRONG";
-		cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
+		bool r = IsCorrect(cpuAns, solution);
+		string result = r ? "OK" : "WRONG";
+		if (!r)
+			cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
 
 		counter++;
 	}
+
+	i.close();
 }
 
 void runTest(int argc, char **argv)
@@ -77,7 +84,8 @@ void runTest(int argc, char **argv)
 	runKernel();
 }
 
-int main(int argc, char** argv)
+int main(int argc, u8** argv)
 {
 	SolveFromFile(sudokuPath);
+	return 0;
 }

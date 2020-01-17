@@ -101,9 +101,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <CudaCompile Include="solver.cu" />
+    <ClCompile Include="cpuSolver.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="cpuSolver.h" />
+    <ClInclude Include="helper.h" />
     <ClInclude Include="solver.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
