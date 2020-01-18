@@ -1,4 +1,4 @@
 #pragma once
 #include "helper.h"
 
-void SolveCpu(u8 sudoku[81], u8 result[81]);
+void SolveCpu(u16 sudoku[81], u16 result[81]);

@@ -1,3 +1,3 @@
 #pragma once
 
-using u8 = unsigned int;
+using u16 = unsigned short;

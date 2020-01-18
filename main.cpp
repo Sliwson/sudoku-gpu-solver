@@ -17,7 +17,7 @@ using namespace std;
 constexpr char* sudokuPath = "sudoku.csv";
 constexpr int sudokuMaxCout = 0xefffff;
 
-bool IsCorrect(u8* sudoku, u8* answer)
+bool IsCorrect(u16* sudoku, u16* answer)
 {
 	for (int i = 0; i < 81; i++)
 		if (answer[i] != sudoku[i])
@@ -32,8 +32,8 @@ void SolveFromFile(string filename)
 	if (!i.good())
 		return;
 
-	u8 sudoku[81];
-	u8 solution[81];
+	u16 sudoku[81];
+	u16 solution[81];
 
 	int counter = 1;
 	
@@ -41,6 +41,7 @@ void SolveFromFile(string filename)
 	string s;
 	getline(i, s);
 
+	const auto beginAll = chrono::high_resolution_clock::now();
 	while (getline(i, s) && counter <= sudokuMaxCout)
 	{
 		//read sudoku
@@ -54,7 +55,7 @@ void SolveFromFile(string filename)
 		const auto begin = chrono::high_resolution_clock::now();
 		//compute
 
-		u8 cpuAns[81];
+		u16 cpuAns[81];
 		SolveCpu(sudoku, cpuAns);
 
 		const auto end = chrono::high_resolution_clock::now();
@@ -66,8 +67,17 @@ void SolveFromFile(string filename)
 		if (!r)
 			cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
 
+		if (counter % 50000 == 0)
+			cout << "Progress: " << counter << "/1000000" << endl;
+
 		counter++;
 	}
+
+	const auto endAll = chrono::high_resolution_clock::now();
+	const auto duration = chrono::duration_cast<chrono::milliseconds>(endAll - beginAll).count();
+
+	cout << "Solved " << counter << " sudoku in " << duration << " miliseconds" << endl;
+	cout << "Preformance: " << counter / duration << " sudoku/ms" << endl;
 
 	i.close();
 }
@@ -84,7 +94,7 @@ void runTest(int argc, char **argv)
 	runKernel();
 }
 
-int main(int argc, u8** argv)
+int main(int argc, u16** argv)
 {
 	SolveFromFile(sudokuPath);
 	return 0;
