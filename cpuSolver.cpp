@@ -2,6 +2,15 @@
 #include <algorithm>
 #include <iostream>
 
+namespace {
+	void FillMask(u16* sudoku, u16* mask)
+	{
+		for (int i = 0; i < 81; i++)
+			if (sudoku[i] > 0)
+				mask[i] = 1 << (sudoku[i] - 1);
+	}
+}
+
 bool IsPowerOfTwo(u16 x)
 {
 	return x != 0 && (x & (x - 1)) == 0;
@@ -17,13 +26,6 @@ int CountOnes(u16 x)
 	}
 
 	return count;
-}
-
-void FillMask(u16* sudoku, u16* mask)
-{
-	for (int i = 0; i < 81; i++)
-		if (sudoku[i] > 0)
-			mask[i] = 1 << (sudoku[i] - 1);
 }
 
 int FindIdexWithLowest(u16* mask, int& count, int maskIdx)
@@ -216,6 +218,7 @@ void SolveCpu(u16 sudoku[81], u16 result[81])
 			{
 			}
 		}
+
 		activeMasks = activeMasksNew;
 		if (activeMasks > maxMasks)
 			std::cout << "Active masks: " << activeMasks << std::endl;

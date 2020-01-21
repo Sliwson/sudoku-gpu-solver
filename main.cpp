@@ -56,7 +56,8 @@ void SolveFromFile(string filename)
 		//compute
 
 		u16 cpuAns[81];
-		SolveCpu(sudoku, cpuAns);
+		//SolveCpu(sudoku, cpuAns);
+		runKernel(sudoku, cpuAns);
 
 		const auto end = chrono::high_resolution_clock::now();
 		const auto duration = chrono::duration_cast<chrono::milliseconds>(end - begin).count();
@@ -80,18 +81,6 @@ void SolveFromFile(string filename)
 	cout << "Preformance: " << counter / duration << " sudoku/ms" << endl;
 
 	i.close();
-}
-
-void runTest(int argc, char **argv)
-{
-    // use command-line specified CUDA device, otherwise use device with highest Gflops/s
-    const int devID = findCudaDevice(argc, (const char **)argv);
-
-    StopWatchInterface *timer = 0;
-    sdkCreateTimer(&timer);
-    sdkStartTimer(&timer);
-
-	runKernel();
 }
 
 int main(int argc, u16** argv)
