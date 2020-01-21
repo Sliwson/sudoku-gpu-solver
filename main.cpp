@@ -56,7 +56,6 @@ void SolveFromFile(string filename)
 		//compute
 
 		u16 cpuAns[81];
-		//SolveCpu(sudoku, cpuAns);
 		runKernel(sudoku, cpuAns);
 
 		const auto end = chrono::high_resolution_clock::now();
@@ -85,6 +84,8 @@ void SolveFromFile(string filename)
 
 int main(int argc, u16** argv)
 {
+	InitKernel();
 	SolveFromFile(sudokuPath);
+	CleanKernel();
 	return 0;
 }

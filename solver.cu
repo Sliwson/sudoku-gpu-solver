@@ -1,4 +1,5 @@
 #include "solver.cuh"
+#include <stdio.h>
 
 namespace {
 	void FillMask(u16* sudoku, u16* mask)
@@ -9,7 +10,25 @@ namespace {
 			else
 				mask[i] = 0x1ff;
 	}
+
+	void FillResult(u16* mask, u16* result)
+	{
+		for (int i = 0; i < 81; i++)
+		{
+			int m = 1;
+			for (int r = 1; r <= 9; r++)
+			{
+				if (m << (r - 1) == mask[i])
+					result[i] = r;
+			}
+		}
+	}
+	
+	u16* d_sudoku;
+	bool* d_propagated;
 }
+
+__device__ bool d_anyChanged;
 
 __global__ void testKernel()
 {
@@ -32,13 +51,15 @@ __device__ bool IsPowerOfTwo(const u16 &x)
 
 __global__ void Propagate(u16* d_mask, bool* d_propagated, int maskIdx)
 {
-    const unsigned int tid = threadIdx.x;
+    const int tid = threadIdx.x;
 	if (tid >= 81)
 		return;
 
+	d_anyChanged = false;
 	if (d_propagated[tid] || !IsPowerOfTwo(d_mask[tid]))
 		return;
 
+	d_anyChanged = true;
 	d_propagated[tid] = true;
 	u16 propagationMask = 0x1ff & ~d_mask[tid];
 
@@ -56,15 +77,18 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated, int maskIdx)
 	int right = left + 8;
 
 	pos = tid + 1;
-	Clamp(pos, left, right);
+	if (pos > right)
+		pos = left;
 
 	for (int i = 0; i < 8; i++)
 	{
+		
 		d_mask[pos] &= propagationMask;
 		pos++;
-		Clamp(pos, left, right);
+		if (pos > right)
+			pos = left;
 	}
-
+	
 	//in square
 	int sx = (tid % 9) / 3 * 3 + 1;
 	int sy = (tid / 27) * 3 + 1;
@@ -73,15 +97,13 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated, int maskIdx)
 	int y = tid / 9;
 	for (int i = 0; i < 8; i++)
 	{
-		if (x + 1 > sx + 1)
+		x++;
+		if (x > sx + 1)
 		{
 			x = sx - 1;
 			y++;
-			Clamp(y, sy - 1, sy + 1);
-		}
-		else
-		{
-			x++;
+			if (y > sy + 1)
+				y = sy - 1;
 		}
 
 		int p = 9 * y + x;
@@ -89,18 +111,24 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated, int maskIdx)
 	}
 }
 
+void InitKernel()
+{
+	cudaMalloc(&d_propagated, 81 * sizeof(bool));
+	cudaMalloc(&d_sudoku, 81 * sizeof(u16));
+}
+
+void CleanKernel()
+{
+	cudaFree(d_sudoku);
+	cudaFree(d_propagated);
+}
+
 void runKernel(u16 sudoku[81], u16 result[81])
 {
 	u16 mask[81];
 	FillMask(sudoku, mask);
 
-	u16* d_sudoku;
-	bool* d_propagated;
-
-	cudaMalloc(&d_sudoku, 81 * sizeof(u16));
 	cudaMemcpy(d_sudoku, mask, 81 * sizeof(u16), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&d_propagated, 81 * sizeof(bool));
 	cudaMemset(d_propagated, false, 81 * sizeof(bool));
 
 	// setup execution parameters
@@ -108,10 +136,17 @@ void runKernel(u16 sudoku[81], u16 result[81])
     dim3  threads(128, 1, 1);
 
     // execute the kernel
-	Propagate<<<grid, threads>>>(d_sudoku, d_propagated, 0);
+	while (true)
+	{
+		Propagate << <grid, threads >> > (d_sudoku, d_propagated, 0);
+		bool anyChanged;
+		cudaMemcpyFromSymbol(&anyChanged, d_anyChanged, sizeof(anyChanged), 0, cudaMemcpyDeviceToHost);
+		if (!anyChanged)
+			break;
+	}
 
 	cudaMemcpy(mask, d_sudoku, 81 * sizeof(u16), cudaMemcpyDeviceToHost);
 
-	cudaFree(d_sudoku);
-	cudaFree(d_propagated);
+
+	FillResult(mask, result);
 }
