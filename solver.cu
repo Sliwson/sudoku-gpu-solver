@@ -2,6 +2,8 @@
 #include <stdio.h>
 
 namespace {
+	constexpr int MEM_SIZE = 10000;
+
 	void FillMask(u16* sudoku, u16* mask)
 	{
 		for (int i = 0; i < 81; i++)
@@ -44,7 +46,7 @@ __device__ bool IsPowerOfTwo(const u16 &x)
 	return x != 0 && (x & (x - 1)) == 0;
 }
 
-__device__ int CountOnes(const u16& x)
+__device__ __host__ int CountOnes(const u16& x)
 {
 	int count = 0;
 	for (int i = 0; i <= 9; i++)
@@ -64,7 +66,7 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 	const int maskIdx = blockIdx.x;
 
 	//set up startup point on matrix
-	d_mask += maskIdx;
+	d_mask += maskIdx * 81;
 
 	if (tid >= 81)
 		return;
@@ -135,7 +137,7 @@ __global__ void FindLowest(u16* d_mask, int* helperInt)
 {
 	int tid = threadIdx.x;
 	int sudokuIdx = blockIdx.x;
-	d_mask += sudokuIdx;
+	d_mask += sudokuIdx * 81;
 
 	if (tid >= 81)
 		return;
@@ -149,6 +151,7 @@ __global__ void FindLowest(u16* d_mask, int* helperInt)
 	if (tid < 64)
 		s[tid + 81] = tid;
 
+	__syncthreads();
 	int working = 64;
 	while (working > 1)
 	{
@@ -168,16 +171,32 @@ __global__ void FindLowest(u16* d_mask, int* helperInt)
 
 	if (tid == 0)
 	{
-		helperInt[2 * sudokuIdx] = s[0];
+		helperInt[2 * sudokuIdx] = d_mask[s[81]];
 		helperInt[2 * sudokuIdx + 1] = s[81];
 	}
 }
 
+__global__ void CloneKernel(u16* mask, bool* propagated, int sudokuFrom, int sudokuTo, int splitIdx, u16 splitMask)
+{
+	int tid = threadIdx.x;
+
+	if (tid >= 81)
+		return;
+
+	u16* from = mask + sudokuFrom * 81;
+	u16* to = mask + sudokuTo * 81;
+	bool* propagatedFrom = propagated + sudokuFrom * 81;
+	bool* propagatedTo = propagated + sudokuTo * 81;
+
+	to[tid] = tid == splitIdx ? splitMask : from[tid];
+	propagatedTo[tid] = propagatedFrom[tid];
+}
+
 void InitKernel()
 {
-	cudaMalloc(&d_propagated, 81 * 1000 * sizeof(bool));
-	cudaMalloc(&d_sudoku, 81 * 1000 * sizeof(u16));
-	cudaMalloc(&d_helperInt, 2000 * sizeof(int));
+	cudaMalloc(&d_propagated, 81 * MEM_SIZE * sizeof(bool));
+	cudaMalloc(&d_sudoku, 81 * MEM_SIZE * sizeof(u16));
+	cudaMalloc(&d_helperInt, 2 * MEM_SIZE * sizeof(int));
 }
 
 void CleanKernel()
@@ -192,15 +211,16 @@ void runKernel(u16 sudoku[81], u16 result[81])
 	u16 mask[81];
 	FillMask(sudoku, mask);
 	int activeMasks = 1;
+	int solutionIdx = -1;
+	int testSplit[MEM_SIZE];
 
 	cudaMemcpy(d_sudoku, mask, 81 * sizeof(u16), cudaMemcpyHostToDevice);
-	cudaMemset(d_propagated, false, 81 * 1000 * sizeof(bool));
-	cudaMemset(d_helperInt, 0, 2000 * sizeof(int));
+	cudaMemset(d_propagated, false, 81 * MEM_SIZE * sizeof(bool));
+	cudaMemset(d_helperInt, 0, 2 * MEM_SIZE * sizeof(int));
 
-	while (true)
+	bool end = false;
+	while (!end)
 	{
-		int activeMasksNew = activeMasks;
-
 		//propagate all sudokus
 		while (true)
 		{
@@ -213,13 +233,49 @@ void runKernel(u16 sudoku[81], u16 result[81])
 
 		//check for split
 		FindLowest << <activeMasks, 128 >> > (d_sudoku, d_helperInt);
-		int testSplit[2];
 		cudaMemcpy(testSplit, d_helperInt, activeMasks * 2 * sizeof(int), cudaMemcpyDeviceToHost);
 
-		if (testSplit[0] == 10)
-			break;
+		int activeMasksNew = activeMasks;
+		for (int i = 0; i < activeMasks; i++)
+		{
+			u16 winner = testSplit[2 * i];
+			int winnerIdx = testSplit[2 * i + 1];
+			
+			int ones = CountOnes(winner);
+			//only ones
+			if (ones == 1)
+			{
+				solutionIdx = i;
+				end = true;
+				break;
+			}
+			else if (ones == 0)
+			{
+				//trash solution
+			}
+			else
+			{
+				//split
+				bool first = true;
+				for (int s = 0; s <= 9; s++)
+					if (((winner >> s) & 1) == 1)
+					{
+						CloneKernel << <1, 128 >> > (d_sudoku, d_propagated, i, first ? i : activeMasksNew, winnerIdx, 1 << s);
+						if (!first)
+							activeMasksNew++;
+
+						first = false;
+					}
+
+				u16 afterSplit[81 * 2];
+				cudaMemcpy(afterSplit, d_sudoku, 81 * 2 * sizeof(u16), cudaMemcpyDeviceToHost);
+				printf("test");
+			}
+		}
+
+		activeMasks = activeMasksNew;
 	}
 	
-	cudaMemcpy(mask, d_sudoku, 81 * sizeof(u16), cudaMemcpyDeviceToHost);
+	cudaMemcpy(mask, d_sudoku + 81 * solutionIdx, 81 * sizeof(u16), cudaMemcpyDeviceToHost);
 	FillResult(mask, result);
 }
