@@ -61,7 +61,7 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 	d_kernelBool = false;
 
     const int tid = threadIdx.x;
-	const int maskIdx = blockDim.x;
+	const int maskIdx = blockIdx.x;
 
 	//set up startup point on matrix
 	d_mask += maskIdx;
@@ -71,6 +71,7 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 
 	__shared__ u16 s[81];
 	s[tid] = d_mask[tid];
+	__syncthreads();
 
 	if (!d_propagated[tid] && IsPowerOfTwo(s[tid]))
 	{
@@ -126,12 +127,50 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 		}
 	}
 
+	__syncthreads();
 	d_mask[tid] = s[tid];
 }
 
-__global__ void FindLowest(u16* d_mask)
+__global__ void FindLowest(u16* d_mask, int* helperInt)
 {
+	int tid = threadIdx.x;
+	int sudokuIdx = blockIdx.x;
+	d_mask += sudokuIdx;
 
+	if (tid >= 81)
+		return;
+
+	__shared__ u16 s[81 + 64];
+	s[tid] = CountOnes(d_mask[tid]);
+
+	if (s[tid] == 1)
+		s[tid] = 10;
+
+	if (tid < 64)
+		s[tid + 81] = tid;
+
+	int working = 64;
+	while (working > 1)
+	{
+		if (tid < working)
+		{
+			int targetIdx = working * 2 - tid - 1;
+			if (targetIdx < 81 && s[targetIdx] < s[tid])
+			{
+				s[tid] = s[targetIdx];
+				s[tid + 81] = targetIdx;
+			}
+		}
+
+		working >>= 1;
+		__syncthreads();
+	}
+
+	if (tid == 0)
+	{
+		helperInt[2 * sudokuIdx] = s[0];
+		helperInt[2 * sudokuIdx + 1] = s[81];
+	}
 }
 
 void InitKernel()
@@ -173,7 +212,12 @@ void runKernel(u16 sudoku[81], u16 result[81])
 		}
 
 		//check for split
-		break;
+		FindLowest << <activeMasks, 128 >> > (d_sudoku, d_helperInt);
+		int testSplit[2];
+		cudaMemcpy(testSplit, d_helperInt, activeMasks * 2 * sizeof(int), cudaMemcpyDeviceToHost);
+
+		if (testSplit[0] == 10)
+			break;
 	}
 	
 	cudaMemcpy(mask, d_sudoku, 81 * sizeof(u16), cudaMemcpyDeviceToHost);
