@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 namespace {
-	constexpr int MEM_SIZE = 10000;
+	constexpr int MEM_SIZE = 50000;
 
 	void FillMask(u16* sudoku, u16* mask)
 	{

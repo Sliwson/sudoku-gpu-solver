@@ -14,7 +14,7 @@
 
 using namespace std;
 
-constexpr char* sudokuPath = "sudoku.csv";
+constexpr char* sudokuPath = "sudoku2.csv";
 constexpr int sudokuMaxCout = 0xefffff;
 
 bool IsCorrect(u16* sudoku, u16* answer)
@@ -67,7 +67,7 @@ void SolveFromFile(string filename)
 		if (!r)
 			cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
 
-		if (counter % 50000 == 0)
+		if (counter % 5000 == 0)
 			cout << "Progress: " << counter << "/1000000" << endl;
 
 		counter++;
