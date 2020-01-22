@@ -67,15 +67,15 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 
 	//set up startup point on matrix
 	d_mask += maskIdx * 81;
-
-	if (tid >= 81)
-		return;
+	d_propagated += maskIdx * 81;
 
 	__shared__ u16 s[81];
-	s[tid] = d_mask[tid];
+	if (tid < 81)
+		s[tid] = d_mask[tid];
+	
 	__syncthreads();
 
-	if (!d_propagated[tid] && IsPowerOfTwo(s[tid]))
+	if (tid < 81 && !d_propagated[tid] && IsPowerOfTwo(s[tid]))
 	{
 		d_kernelBool = true;
 		d_propagated[tid] = true;
@@ -100,7 +100,6 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 
 		for (int i = 0; i < 8; i++)
 		{
-			
 			s[pos] &= propagationMask;
 			pos++;
 			if (pos > right)
@@ -123,14 +122,15 @@ __global__ void Propagate(u16* d_mask, bool* d_propagated)
 				if (y > sy + 1)
 					y = sy - 1;
 			}
-
+			
 			int p = 9 * y + x;
 			s[p] &= propagationMask;
 		}
 	}
 
 	__syncthreads();
-	d_mask[tid] = s[tid];
+	if (tid < 81)
+		d_mask[tid] = s[tid];
 }
 
 __global__ void FindLowest(u16* d_mask, int* helperInt)
@@ -139,16 +139,16 @@ __global__ void FindLowest(u16* d_mask, int* helperInt)
 	int sudokuIdx = blockIdx.x;
 	d_mask += sudokuIdx * 81;
 
-	if (tid >= 81)
-		return;
+	__shared__ int s[81 + 64];
 
-	__shared__ u16 s[81 + 64];
-	s[tid] = CountOnes(d_mask[tid]);
+	if (tid < 81)
+	{
+		s[tid] = CountOnes(d_mask[tid]);
+		if (s[tid] == 1)
+			s[tid] = 10;
+	}
 
-	if (s[tid] == 1)
-		s[tid] = 10;
-
-	if (tid < 64)
+	/*if (tid < 64)
 		s[tid + 81] = tid;
 
 	__syncthreads();
@@ -167,12 +167,18 @@ __global__ void FindLowest(u16* d_mask, int* helperInt)
 
 		working >>= 1;
 		__syncthreads();
-	}
+	}*/
 
+	__syncthreads();
 	if (tid == 0)
 	{
-		helperInt[2 * sudokuIdx] = d_mask[s[81]];
-		helperInt[2 * sudokuIdx + 1] = s[81];
+		int minIdx = 0;
+		for (int i = 1; i < 81; i++)
+			if (s[i] < s[minIdx])
+				minIdx = i;
+
+		helperInt[2 * sudokuIdx] = d_mask[minIdx]; //d_mask[s[81]];
+		helperInt[2 * sudokuIdx + 1] = minIdx; //s[81];
 	}
 }
 
@@ -230,7 +236,7 @@ void runKernel(u16 sudoku[81], u16 result[81])
 			if (!anyChanged)
 				break;
 		}
-
+		
 		//check for split
 		FindLowest << <activeMasks, 128 >> > (d_sudoku, d_helperInt);
 		cudaMemcpy(testSplit, d_helperInt, activeMasks * 2 * sizeof(int), cudaMemcpyDeviceToHost);
@@ -266,10 +272,6 @@ void runKernel(u16 sudoku[81], u16 result[81])
 
 						first = false;
 					}
-
-				u16 afterSplit[81 * 2];
-				cudaMemcpy(afterSplit, d_sudoku, 81 * 2 * sizeof(u16), cudaMemcpyDeviceToHost);
-				printf("test");
 			}
 		}
 
