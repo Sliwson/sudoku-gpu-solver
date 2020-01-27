@@ -9,6 +9,21 @@ namespace {
 			if (sudoku[i] > 0)
 				mask[i] = 1 << (sudoku[i] - 1);
 	}
+	
+	u16* mask = nullptr;
+	bool* propagated = nullptr;
+}
+
+void InitCpu()
+{
+	mask = new u16[81 * MEM_SIZE];
+	propagated = new bool[81 * MEM_SIZE];
+}
+
+void CleanCpu()
+{
+	delete[] mask;
+	delete[] propagated;
 }
 
 bool IsPowerOfTwo(u16 x)
@@ -171,11 +186,8 @@ void CopySudoku(u16* mask, bool* propagated, int idxFrom, int idxTo, int splitId
 
 void SolveCpu(u16 sudoku[81], u16 result[81])
 {
-	const int maxMasks = 1000;
-	u16 mask[81 * maxMasks];
-	std::fill_n(mask, 81 * maxMasks, 0x1ff);
-
-	bool propagated[81 * maxMasks] = { false };
+	std::fill_n(mask, 81, 0x1ff);
+	std::fill_n(propagated, 81, false);
 
 	int activeMasks = 1;
 	FillMask(sudoku, mask);
@@ -220,7 +232,5 @@ void SolveCpu(u16 sudoku[81], u16 result[81])
 		}
 
 		activeMasks = activeMasksNew;
-		if (activeMasks > maxMasks)
-			std::cout << "Active masks: " << activeMasks << std::endl;
 	}
 }

@@ -13,9 +13,12 @@
 #include "solver.cuh"
 #include "cpuSolver.h"
 
+#define LOG
+
 using namespace std;
 
-constexpr char* sudokuPath = "sudoku.csv";
+constexpr char* sudokuPath = "medium.csv";
+//constexpr char* sudokuPath = "sudoku.csv";
 constexpr int sudokuMaxCout = 0xefffff;
 
 bool IsCorrect(u16* sudoku, u16* answer)
@@ -91,8 +94,10 @@ void SolveFromFile(string filename)
 	//skip first line
 	string s;
 	getline(i, s);
+	
+	unsigned long long cpuTime = 0;
+	unsigned long long gpuTime = 0;
 
-	const auto beginAll = chrono::high_resolution_clock::now();
 	while (getline(i, s) && counter <= sudokuMaxCout)
 	{
 		//read sudoku
@@ -103,32 +108,44 @@ void SolveFromFile(string filename)
 		for (int i = 82; i < 163; i++)
 			solution[i - 82] = s[i] - 48;
 
+		//GPU
 		const auto begin = chrono::high_resolution_clock::now();
-		//compute
 
-		u16 cpuAns[81];
-		runKernel(sudoku, cpuAns);
+		u16 gpuAns[81];
+		runKernel(sudoku, gpuAns);
 
 		const auto end = chrono::high_resolution_clock::now();
 		const auto duration = chrono::duration_cast<chrono::milliseconds>(end - begin).count();
 
-		//check result
-		bool r = IsCorrect(cpuAns);
-		string result = r ? "OK" : "WRONG";
-		if (!r)
-			cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
+		//CPU
+		const auto beginCpu = chrono::high_resolution_clock::now();
 
-		if (counter % 5000 == 0)
-			cout << "Progress: " << counter << "/1000000" << endl;
+		u16 cpuAns[81];
+		SolveCpu(sudoku, cpuAns);
+
+		const auto endCpu = chrono::high_resolution_clock::now();
+		const auto durationCpu = chrono::duration_cast<chrono::milliseconds>(endCpu - beginCpu).count();
+
+		//check result
+		bool rGpu = IsCorrect(gpuAns);
+		bool rCpu = IsCorrect(cpuAns);
+#ifdef LOG
+		string resultGpu = rGpu ? "OK" : "WRONG";
+		string resultCpu = rCpu ? "OK" : "WRONG";
+		cout << "GPU: Sudoku[" << counter << "]: t = " << duration << ", result: " << resultGpu << endl;
+		cout << "CPU: Sudoku[" << counter << "]: t = " << durationCpu << ", result: " << resultCpu << endl;
+#endif
+
+		cpuTime += durationCpu;
+		gpuTime += duration;
 
 		counter++;
+		if (counter >= 10000)
+			break;
 	}
 
-	const auto endAll = chrono::high_resolution_clock::now();
-	const auto duration = chrono::duration_cast<chrono::milliseconds>(endAll - beginAll).count();
-
-	cout << "Solved " << counter << " sudoku in " << duration << " miliseconds" << endl;
-	cout << "Preformance: " << counter / duration << " sudoku/ms" << endl;
+	cout << "Solved " << counter << " sudoku in gpu = " << gpuTime << "ms, cpu = " << cpuTime << "ms" << endl;
+	cout << "Gpu preformance: " << ((float)counter / gpuTime) << " sudoku/ms" << endl;
 
 	i.close();
 }
@@ -136,7 +153,12 @@ void SolveFromFile(string filename)
 int main(int argc, u16** argv)
 {
 	InitKernel();
+	InitCpu();
+
 	SolveFromFile(sudokuPath);
+
+	CleanCpu();
 	CleanKernel();
+
 	return 0;
 }

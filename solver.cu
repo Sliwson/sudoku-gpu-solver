@@ -2,8 +2,6 @@
 #include <stdio.h>
 
 namespace {
-	constexpr int MEM_SIZE = 50000;
-
 	void FillMask(u16* sudoku, u16* mask)
 	{
 		for (int i = 0; i < 81; i++)
@@ -29,6 +27,7 @@ namespace {
 	u16* d_sudoku;
 	bool* d_propagated;
 	int* d_helperInt;
+	int* testSplit;
 }
 
 __device__ bool d_kernelBool;
@@ -203,6 +202,7 @@ void InitKernel()
 	cudaMalloc(&d_propagated, 81 * MEM_SIZE * sizeof(bool));
 	cudaMalloc(&d_sudoku, 81 * MEM_SIZE * sizeof(u16));
 	cudaMalloc(&d_helperInt, 2 * MEM_SIZE * sizeof(int));
+	testSplit = new int[MEM_SIZE * 2];
 }
 
 void CleanKernel()
@@ -210,6 +210,18 @@ void CleanKernel()
 	cudaFree(d_sudoku);
 	cudaFree(d_propagated);
 	cudaFree(d_helperInt);
+	delete[] testSplit;
+}
+
+int FindFreeIdx(int* testSplit, int masksCount)
+{
+	for (int i = 0; i < masksCount; i++)
+	{
+		if (testSplit[2 * i] == 0)
+			return i;
+	}
+
+	return masksCount;
 }
 
 void runKernel(u16 sudoku[81], u16 result[81])
@@ -218,7 +230,6 @@ void runKernel(u16 sudoku[81], u16 result[81])
 	FillMask(sudoku, mask);
 	int activeMasks = 1;
 	int solutionIdx = -1;
-	int testSplit[MEM_SIZE];
 
 	cudaMemcpy(d_sudoku, mask, 81 * sizeof(u16), cudaMemcpyHostToDevice);
 	cudaMemset(d_propagated, false, 81 * MEM_SIZE * sizeof(bool));
@@ -255,12 +266,15 @@ void runKernel(u16 sudoku[81], u16 result[81])
 				end = true;
 				break;
 			}
-			else if (ones == 0)
-			{
-				//trash solution
-			}
 			else
 			{
+				if (activeMasksNew > MEM_SIZE / 2 - 9)
+				{
+					i = activeMasks;
+					activeMasksNew = activeMasksNew / 100;
+					continue;
+				}
+
 				//split
 				bool first = true;
 				for (int s = 0; s <= 9; s++)
@@ -269,7 +283,6 @@ void runKernel(u16 sudoku[81], u16 result[81])
 						CloneKernel << <1, 128 >> > (d_sudoku, d_propagated, i, first ? i : activeMasksNew, winnerIdx, 1 << s);
 						if (!first)
 							activeMasksNew++;
-
 						first = false;
 					}
 			}
