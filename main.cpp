@@ -7,6 +7,7 @@
 #include <helper_cuda.h>
 #include <helper_functions.h>
 #include <iostream>
+#include <array>
 #include <chrono>
 
 #include "solver.cuh"
@@ -14,7 +15,7 @@
 
 using namespace std;
 
-constexpr char* sudokuPath = "sudoku2.csv";
+constexpr char* sudokuPath = "sudoku.csv";
 constexpr int sudokuMaxCout = 0xefffff;
 
 bool IsCorrect(u16* sudoku, u16* answer)
@@ -22,6 +23,56 @@ bool IsCorrect(u16* sudoku, u16* answer)
 	for (int i = 0; i < 81; i++)
 		if (answer[i] != sudoku[i])
 			return false;
+
+	return true;
+}
+
+bool IsCorrect(u16* sudoku)
+{
+	for (int i = 0; i < 81; i++)
+		if (sudoku[i] <= 0 || sudoku[i] > 9)
+			return false;
+
+	//horizontal
+	array<bool, 9> answers;
+	for (int i = 0; i < 9; i++)
+	{
+		for_each(answers.begin(), answers.end(), [](auto& el) { el = false; });
+		for (int j = 0; j < 9; j++)
+			answers[sudoku[i * 9 + j] - 1] = true;
+
+		if (std::any_of(answers.begin(), answers.end(), [](const auto& el) { return el == false; }))
+			return false;
+	}
+
+	//vertical
+	for (int i = 0; i < 9; i++)
+	{
+		for_each(answers.begin(), answers.end(), [](auto& el) { el = false; });
+		for (int j = 0; j < 9; j++)
+			answers[sudoku[j * 9 + i] - 1] = true;
+
+		if (std::any_of(answers.begin(), answers.end(), [](const auto& el) { return el == false; }))
+			return false;
+	}
+
+	//squares
+	for (int x = 0; x < 3; x++)
+	{
+		for (int y = 0; y < 3; y++)
+		{
+			for_each(answers.begin(), answers.end(), [](auto& el) { el = false; });
+			int x1 = 3 * x + 1;
+			int y1 = 3 * y + 1;
+
+			for (int xx = x1 - 1; xx <= x1 + 1; xx++)
+				for (int yy = y1 - 1; yy <= y1 + 1; yy++)
+					answers[sudoku[9 * yy + xx] - 1] = true;
+
+			if (std::any_of(answers.begin(), answers.end(), [](const auto& el) { return el == false; }))
+				return false;
+		}
+	}
 
 	return true;
 }
@@ -62,7 +113,7 @@ void SolveFromFile(string filename)
 		const auto duration = chrono::duration_cast<chrono::milliseconds>(end - begin).count();
 
 		//check result
-		bool r = IsCorrect(cpuAns, solution);
+		bool r = IsCorrect(cpuAns);
 		string result = r ? "OK" : "WRONG";
 		if (!r)
 			cout << "Sudoku[" << counter << "]: t = " << duration << ", result: " << result << endl;
