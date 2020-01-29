@@ -271,7 +271,8 @@ void runKernel(u16 sudoku[81], u16 result[81])
 				if (activeMasksNew > MEM_SIZE / 2 - 9)
 				{
 					i = activeMasks;
-					activeMasksNew = activeMasksNew / 100;
+					activeMasksNew = activeMasksNew / 10000;
+					printf("Rejecting calculations...\n");
 					continue;
 				}
 

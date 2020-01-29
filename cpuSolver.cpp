@@ -209,6 +209,15 @@ void SolveCpu(u16 sudoku[81], u16 result[81])
 
 				if (minimumHigherIdx >= 0)
 				{
+					if (activeMasksNew > MEM_SIZE / 2 - 9)
+					{
+						i = activeMasks;
+						activeMasksNew = activeMasksNew / 10000;
+						printf("Rejecting calculations...\n");
+						continue;
+					}
+
+
 					u16 x = mask[81 * i + minimumHigherIdx];
 					bool first = true;
 					for (int s = 0; s <= 9; s++)

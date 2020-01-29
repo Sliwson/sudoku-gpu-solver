@@ -14,10 +14,11 @@
 #include "cpuSolver.h"
 
 #define LOG
+//#define CPU
 
 using namespace std;
 
-constexpr char* sudokuPath = "medium.csv";
+constexpr char* sudokuPath = "zeros.csv";
 //constexpr char* sudokuPath = "sudoku.csv";
 constexpr int sudokuMaxCout = 0xefffff;
 
@@ -121,7 +122,9 @@ void SolveFromFile(string filename)
 		const auto beginCpu = chrono::high_resolution_clock::now();
 
 		u16 cpuAns[81];
+#ifdef CPU
 		SolveCpu(sudoku, cpuAns);
+#endif
 
 		const auto endCpu = chrono::high_resolution_clock::now();
 		const auto durationCpu = chrono::duration_cast<chrono::milliseconds>(endCpu - beginCpu).count();
@@ -133,7 +136,9 @@ void SolveFromFile(string filename)
 		string resultGpu = rGpu ? "OK" : "WRONG";
 		string resultCpu = rCpu ? "OK" : "WRONG";
 		cout << "GPU: Sudoku[" << counter << "]: t = " << duration << ", result: " << resultGpu << endl;
+#ifdef CPU
 		cout << "CPU: Sudoku[" << counter << "]: t = " << durationCpu << ", result: " << resultCpu << endl;
+#endif
 #endif
 
 		cpuTime += durationCpu;
@@ -144,7 +149,7 @@ void SolveFromFile(string filename)
 			break;
 	}
 
-	cout << "Solved " << counter << " sudoku in gpu = " << gpuTime << "ms, cpu = " << cpuTime << "ms" << endl;
+	cout << "Solved " << counter << " sudoku in gpu = " << gpuTime << "ms" << endl;
 	cout << "Gpu preformance: " << ((float)counter / gpuTime) << " sudoku/ms" << endl;
 
 	i.close();
